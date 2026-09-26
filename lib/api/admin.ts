@@ -1,73 +1,48 @@
-import { supabase } from '../supabaseClient';
-import { getEndOfNextMonthISO } from '@/utils/date';
+import { supabase } from '../supabase';
 
-/**
- * 全生徒とそれぞれのアプリ利用権限データを取得する
- */
-export async function getStudentsWithSubscriptions() {
-  const { data, error } = await supabase
-    .from('students')
-    .select(`
-      id,
-      name,
-      level,
-      parents ( display_name ),
-      student_app_subscriptions (
-        app_id,
-        is_enabled,
-        expires_at
-      )
-    `);
+export async function getParentAndStudents(parentId: string) {
+  try {
+    const { data: parent, error: parentError } = await supabase
+      .from('parents')
+      .select('*')
+      .eq('id', parentId)
+      .single();
 
-  if (error) {
-    console.error('生徒データの取得に失敗しました:', error);
-    throw error;
+    if (parentError && parentError.code !== 'PGRST116') {
+      console.error('Error fetching parent:', parentError);
+    }
+
+    const { data: students, error: studentsError } = await supabase
+      .from('students')
+      .select('*')
+      .eq('parent_id', parentId);
+
+    if (studentsError) {
+      console.error('Error fetching students:', studentsError);
+    }
+
+    return {
+      parent: parent || null,
+      students: students || [],
+    };
+  } catch (error) {
+    console.error('getParentAndStudents exception:', error);
+    return { parent: null, students: [] };
   }
-  return data;
 }
 
-/**
- * 対象生徒のアプリ権限をON/OFF更新する
- * - OFFにする場合: is_enabled = false
- * - ONにする場合 : is_enabled = true かつ expires_at に「翌月末」をセット
- */
-export async function toggleAppSubscription(
-  studentId: string,
-  appId: string,
-  currentlyActive: boolean
-) {
-  if (currentlyActive) {
-    // 現在ON ➔ OFFに更新
-    const { error } = await supabase
-      .from('student_app_subscriptions')
-      .upsert(
-        {
-          student_id: studentId,
-          app_id: appId,
-          is_enabled: false,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'student_id,app_id' }
-      );
+export async function verifyParentPin(parentId: string, pin: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('parents')
+      .select('pin_code')
+      .eq('id', parentId)
+      .single();
 
-    if (error) throw error;
-  } else {
-    // 現在OFF ➔ 翌月末までONに更新
-    const nextMonthEnd = getEndOfNextMonthISO();
-
-    const { error } = await supabase
-      .from('student_app_subscriptions')
-      .upsert(
-        {
-          student_id: studentId,
-          app_id: appId,
-          is_enabled: true,
-          expires_at: nextMonthEnd,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'student_id,app_id' }
-      );
-
-    if (error) throw error;
+    if (error || !data) return false;
+    return data.pin_code === pin;
+  } catch (error) {
+    console.error('verifyParentPin exception:', error);
+    return false;
   }
 }
