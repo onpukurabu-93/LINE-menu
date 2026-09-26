@@ -1,0 +1,94 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { ChildMyPage } from '@/components/child/ChildMyPage';
+import { fetchParentData, verifyParentPin } from '@/lib/api/parent';
+
+export default function HomePage() {
+  // 実装時は認証情報やクエリパラメータから取得します（ここではテスト用ID）
+  const parentId = 'parent_123';
+
+  const [parentData, setParentData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [isParentMode, setIsParentMode] = useState(false);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    const data = await fetchParentData(parentId);
+    setParentData(data);
+    setLoading(false);
+  };
+
+  const handleVerifyPin = async (pin: string) => {
+    return await verifyParentPin(parentId, pin);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-amber-50 flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="w-10 h-10 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm font-bold text-amber-800">データをよみこみ中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!parentData) {
+    return (
+      <div className="min-h-screen bg-amber-50 flex items-center justify-center p-4">
+        <p className="text-sm font-bold text-gray-600">データが見つかりませんでした。</p>
+      </div>
+    );
+  }
+
+  // 保護者認証後の画面
+  if (isParentMode) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4 max-w-md mx-auto font-sans">
+        <div className="flex items-center justify-between mb-6 bg-white p-4 rounded-2xl shadow-sm">
+          <h1 className="font-bold text-gray-800 text-lg">🔑 保護者ダッシュボード</h1>
+          <button
+            onClick={() => setIsParentMode(false)}
+            className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-xl"
+          >
+            子供画面にもどる
+          </button>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl shadow-sm mb-4 space-y-3">
+          <h2 className="font-bold text-sm text-gray-700">👤 お子様のご契約状況</h2>
+          {parentData.students.map((student: any) => (
+            <div key={student.id} className="border-t pt-3 first:border-t-0 first:pt-0">
+              <p className="font-bold text-gray-800">{student.name}（レベル: {student.level}）</p>
+              <div className="mt-2 space-y-1">
+                {student.subscriptions.map((sub: any) => (
+                  <div key={sub.appId} className="flex justify-between text-xs text-gray-600">
+                    <span>{sub.name}</span>
+                    <span className="font-semibold text-emerald-600">
+                      {sub.isEnabled ? '契約中' : '未契約'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // 通常表示（子供用マイページ）
+  return (
+    <ChildMyPage
+      parentId={parentId}
+      students={parentData.students}
+      onVerifyPin={handleVerifyPin}
+      onOpenParentMenu={() => setIsParentMode(true)}
+    />
+  );
+}
