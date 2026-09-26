@@ -2,10 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { ChildMyPage } from '@/components/child/ChildMyPage';
-import { fetchParentData, verifyParentPin } from '@/lib/api/parent';
+import { getParentAndStudents, verifyParentPin } from '@/lib/api/parent';
 
 export default function HomePage() {
-  // 実装時は認証情報やクエリパラメータから取得します（ここではテスト用ID）
   const parentId = 'parent_123';
 
   const [parentData, setParentData] = useState<any>(null);
@@ -18,9 +17,14 @@ export default function HomePage() {
 
   const loadData = async () => {
     setLoading(true);
-    const data = await fetchParentData(parentId);
-    setParentData(data);
-    setLoading(false);
+    try {
+      const data = await getParentAndStudents(parentId);
+      setParentData(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleVerifyPin = async (pin: string) => {
@@ -46,7 +50,6 @@ export default function HomePage() {
     );
   }
 
-  // 保護者認証後の画面
   if (isParentMode) {
     return (
       <div className="min-h-screen bg-gray-50 p-4 max-w-md mx-auto font-sans">
@@ -62,19 +65,9 @@ export default function HomePage() {
 
         <div className="bg-white p-5 rounded-2xl shadow-sm mb-4 space-y-3">
           <h2 className="font-bold text-sm text-gray-700">👤 お子様のご契約状況</h2>
-          {parentData.students.map((student: any) => (
+          {parentData.students?.map((student: any) => (
             <div key={student.id} className="border-t pt-3 first:border-t-0 first:pt-0">
               <p className="font-bold text-gray-800">{student.name}（レベル: {student.level}）</p>
-              <div className="mt-2 space-y-1">
-                {student.subscriptions.map((sub: any) => (
-                  <div key={sub.appId} className="flex justify-between text-xs text-gray-600">
-                    <span>{sub.name}</span>
-                    <span className="font-semibold text-emerald-600">
-                      {sub.isEnabled ? '契約中' : '未契約'}
-                    </span>
-                  </div>
-                ))}
-              </div>
             </div>
           ))}
         </div>
@@ -82,11 +75,10 @@ export default function HomePage() {
     );
   }
 
-  // 通常表示（子供用マイページ）
   return (
     <ChildMyPage
       parentId={parentId}
-      students={parentData.students}
+      students={parentData.students || []}
       onVerifyPin={handleVerifyPin}
       onOpenParentMenu={() => setIsParentMode(true)}
     />
