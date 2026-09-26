@@ -1,0 +1,58 @@
+import { supabase } from '../supabaseClient';
+
+/**
+ * LINE User IDから、保護者情報と紐づく子供一覧を取得する
+ */
+export async function getParentAndStudents(lineUserId: string) {
+  const { data, error } = await supabase
+    .from('parents')
+    .select(`
+      id,
+      pin_code,
+      students (
+        id,
+        name,
+        level,
+        student_app_subscriptions (
+          app_id,
+          is_enabled,
+          expires_at
+        )
+      )
+    `)
+    .eq('line_user_id', lineUserId)
+    .single();
+
+  if (error) {
+    console.error('保護者・生徒データの取得に失敗しました:', error);
+    return null;
+  }
+  return data;
+}
+
+/**
+ * 保護者専用メニューに入るための4桁PINコード照合
+ */
+export async function verifyParentPin(parentId: string, inputPin: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('parents')
+    .select('pin_code')
+    .eq('id', parentId)
+    .single();
+
+  if (error || !data) return false;
+
+  return data.pin_code === inputPin;
+}
+
+/**
+ * 保護者のPINコードを変更する
+ */
+export async function updateParentPin(parentId: string, newPin: string) {
+  const { error } = await supabase
+    .from('parents')
+    .update({ pin_code: newPin })
+    .eq('id', parentId);
+
+  if (error) throw error;
+}
