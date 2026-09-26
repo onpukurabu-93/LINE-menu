@@ -1,58 +1,48 @@
-import { supabase } from '../supabaseClient';
+import { supabase } from '../supabase';
 
-/**
- * LINE User IDから、保護者情報と紐づく子供一覧を取得する
- */
-export async function getParentAndStudents(lineUserId: string) {
-  const { data, error } = await supabase
-    .from('parents')
-    .select(`
-      id,
-      pin_code,
-      students (
-        id,
-        name,
-        level,
-        student_app_subscriptions (
-          app_id,
-          is_enabled,
-          expires_at
-        )
-      )
-    `)
-    .eq('line_user_id', lineUserId)
-    .single();
+export async function getParentAndStudents(parentId: string) {
+  try {
+    const { data: parent, error: parentError } = await supabase
+      .from('parents')
+      .select('*')
+      .eq('id', parentId)
+      .single();
 
-  if (error) {
-    console.error('保護者・生徒データの取得に失敗しました:', error);
-    return null;
+    if (parentError && parentError.code !== 'PGRST116') {
+      console.error('Error fetching parent:', parentError);
+    }
+
+    const { data: students, error: studentsError } = await supabase
+      .from('students')
+      .select('*')
+      .eq('parent_id', parentId);
+
+    if (studentsError) {
+      console.error('Error fetching students:', studentsError);
+    }
+
+    return {
+      parent: parent || null,
+      students: students || [],
+    };
+  } catch (error) {
+    console.error('getParentAndStudents exception:', error);
+    return { parent: null, students: [] };
   }
-  return data;
 }
 
-/**
- * 保護者専用メニューに入るための4桁PINコード照合
- */
-export async function verifyParentPin(parentId: string, inputPin: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('parents')
-    .select('pin_code')
-    .eq('id', parentId)
-    .single();
+export async function verifyParentPin(parentId: string, pin: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('parents')
+      .select('pin_code')
+      .eq('id', parentId)
+      .single();
 
-  if (error || !data) return false;
-
-  return data.pin_code === inputPin;
-}
-
-/**
- * 保護者のPINコードを変更する
- */
-export async function updateParentPin(parentId: string, newPin: string) {
-  const { error } = await supabase
-    .from('parents')
-    .update({ pin_code: newPin })
-    .eq('id', parentId);
-
-  if (error) throw error;
+    if (error || !data) return false;
+    return data.pin_code === pin;
+  } catch (error) {
+    console.error('verifyParentPin exception:', error);
+    return false;
+  }
 }
